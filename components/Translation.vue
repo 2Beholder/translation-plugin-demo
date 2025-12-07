@@ -1,42 +1,42 @@
 <template>
   <!-- 划词后的小按钮，出现在选区上方 -->
-  <button
-    v-if="visibleButton"
-    ref="buttonEl"
-    class="translate-btn"
-    :style="{
-      top: buttonPos.top + 'px',
-      left: buttonPos.left + 'px',
-    }"
-    @click="
-      openPanel();
-      goTranslate();
-    "
-  >
-    翻译
+  <button v-if="visibleButton" ref="buttonEl" class="translate-btn" :style="{
+    top: buttonPos.top + 'px',
+    left: buttonPos.left + 'px',
+  }" @click="
+    openPanel();
+  ">
+    <img src="../public/wxt.svg" style="height: 20px;width: 20px;" alt="">
   </button>
 
+
+
   <!-- 点击按钮后弹出的翻译面板（可拖动） -->
-  <div
-    v-if="visiblePanel"
-    ref="panelEl"
-    class="demo"
-    :style="{
-      top: panelPos.top + 'px',
-      left: panelPos.left + 'px',
-    }"
-  >
+  <div v-if="visiblePanel" ref="panelEl" class="demo" :style="{
+    top: panelPos.top + 'px',
+    left: panelPos.left + 'px',
+  }">
     <!-- 作为拖拽区域的头部 -->
-    <div
-      class="demo__header"
-      @mousedown="onDragStart"
-      @touchstart.stop.prevent="onDragStartTouch"
-    >
-      <span>翻译</span>
+    <div class="demo__header" @mousedown="onDragStart" @touchstart.stop.prevent="onDragStartTouch">
+      <span>选中内容</span>
       <button class="demo__close" @click.stop="closePanel">×</button>
     </div>
     <p class="demo__source">{{ text }}</p>
-    <p class="demo__result">翻译结果：</p>
+
+    <!-- 中间面板：选择功能类型 -->
+    <div class="demo__mode">
+      <label>
+        <input type="radio" value="translate" v-model="mode" />
+        翻译
+      </label>
+      <label>
+        <input type="radio" value="explain" v-model="mode" />
+        解释
+      </label>
+      <button class="demo__action" @click="goTranslate">开始</button>
+    </div>
+
+    <p class="demo__result">{{ mode === 'translate' ? '翻译结果：' : '解释结果：' }}</p>
     <p class="demo__result">{{ res }}</p>
   </div>
 </template>
@@ -44,12 +44,14 @@
 <script lang="ts" setup>
 import { storage } from "wxt/utils/storage";
 import { useTextSelection } from "@vueuse/core";
+import type { APIRequest, ResultType } from "@/types";
 
-type Settings = { baseUrl: string; apiKey: string; model: string };
+type Settings = { baseUrl: string; apiKey: string; model: string; targetLang: string };
 
 const { text, rects } = useTextSelection();
 
 const res = ref("");
+const mode = ref<ResultType>("translate");
 
 // 控制显示
 const visibleButton = ref(false);
@@ -195,7 +197,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("touchend", onDragEndTouch);
 });
 
-// 调用翻译接口
+// 调用翻译/解释接口
 const goTranslate = async () => {
   try {
     const settings = await storage.getItem<Settings>("local:settings");
@@ -208,8 +210,20 @@ const goTranslate = async () => {
       res.value = "当前没有选中的文本。";
       return;
     }
-    const response = await translateText(settings, text.value, "zh");
-    res.value = response.data.choices[0].message.content ?? "";
+    const payload: APIRequest = {
+      type: mode.value,
+      config: {
+        baseUrl: settings.baseUrl,
+        apiKey: settings.apiKey,
+        model: settings.model,
+        targetLang: settings.targetLang,
+      },
+      text: text.value,
+      targetLang: settings.targetLang,
+    };
+
+    const response = await translateText(payload);
+    res.value = response.data?.choices[0].message.content ?? "";
   } catch (err: any) {
     console.error("Translate failed:", err);
     res.value = err?.message || "翻译失败，请稍后重试。";
@@ -222,12 +236,11 @@ const goTranslate = async () => {
   position: fixed;
   transform: translate(-50%, -100%);
   z-index: 10000;
-  padding: 4px 8px;
+  padding: 4px;
   font-size: 12px;
   border-radius: 4px;
   border: none;
-  background: #2563eb;
-  color: #fff;
+  background: #f6f6f7;
   cursor: pointer;
 }
 
@@ -282,6 +295,13 @@ const goTranslate = async () => {
   background: #2563eb;
   color: #fff;
   cursor: pointer;
+}
+
+.demo__mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .demo__result {

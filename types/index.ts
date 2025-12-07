@@ -27,6 +27,7 @@ export interface APIRequest {
     baseUrl: string;
     apiKey: string;
     model: string;
+    targetLang: string;
   };
   text?: string;
   targetLang?: string;
